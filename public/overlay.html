@@ -14,6 +14,7 @@ const LIMIT = Math.max(5, +q.get('limit') || 60);   // страховочный 
 const FADE = Math.max(0, +q.get('fade') || 0);      // секунды до исчезновения, 0 = не исчезать
 const SHOW_TS = q.get('ts') === '1';
 const DIR_TOP = (q.get('dir') || '').toLowerCase() === 'top'; // ?dir=top — чат растёт сверху вниз
+const SHOW_PLATFORM = q.get('platform') !== '0'; // ?platform=0 — скрыть значки платформ
 
 // ?size=22 — размер шрифта в px; ?font=Имя — шрифт (системный или файл из папки fonts:
 // все файлы *.ttf/otf/woff/woff2 оттуда регистрируются как @font-face,
@@ -97,7 +98,7 @@ function buildMsg(m) {
   const div = el('div', 'msg ' + (m.kind || 'chat') + (m.action ? ' action' : ''));
 
   if (m.kind === 'system') {
-    if (P_ICONS[m.platform]) div.appendChild(svgSpan(P_ICONS[m.platform]));
+    if (SHOW_PLATFORM && P_ICONS[m.platform]) div.appendChild(svgSpan(P_ICONS[m.platform]));
     const t = el('span', 'text');
     t.textContent = m.system || '';
     div.appendChild(t);
@@ -105,7 +106,7 @@ function buildMsg(m) {
   }
 
   if (SHOW_TS) { const t = el('span', 'time'); t.textContent = fmtTime(m.ts || Date.now()); div.appendChild(t); }
-  if (P_ICONS[m.platform]) div.appendChild(svgSpan(P_ICONS[m.platform]));
+  if (SHOW_PLATFORM && P_ICONS[m.platform]) div.appendChild(svgSpan(P_ICONS[m.platform]));
   const a = m.author || { name: '?', roles: [] };
   if (okUrl(a.avatar)) { const img = el('img', 'avatar'); img.src = a.avatar; img.onerror = () => img.remove(); div.appendChild(img); }
   for (const role of a.roles || []) {

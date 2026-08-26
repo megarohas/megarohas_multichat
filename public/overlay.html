@@ -218,10 +218,12 @@ function place(div, instant) {
 const queue = [];
 let pumping = false;
 
+// Темп нарочно спокойный: сообщения не должны суетливо сдвигать друг друга,
+// даже когда пришла пачка. При переполнении очереди лишнее просто отпадёт.
 function pace() {
-  if (queue.length > 25) return 50;
-  if (queue.length > 10) return 90;
-  return 160;
+  if (queue.length > 30) return 180;
+  if (queue.length > 12) return 300;
+  return 450;
 }
 
 function pump() {

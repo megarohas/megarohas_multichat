@@ -10,8 +10,12 @@ const { YouTubeSource } = require('./lib/youtube');
 
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
+const FONTS_DIR = path.join(ROOT, 'fonts');
 const CONFIG_PATH = path.join(ROOT, 'config.json');
 const HISTORY_CAP = 100;
+const FONT_RE = /\.(ttf|otf|woff2?)$/i;
+
+try { fs.mkdirSync(FONTS_DIR, { recursive: true }); } catch (e) {}
 
 // ---------- config ----------
 let config = { host: '127.0.0.1', port: 3131, sources: [] };
@@ -205,6 +209,10 @@ const MIME = {
   '.js': 'text/javascript; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
 };
 
 function serveFile(res, file) {
@@ -255,6 +263,22 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       if (p === '/api/state') return json(res, 200, { host: config.host, port: config.port, sources: statusList() });
+      if (p === '/api/fonts') {
+        let files = [];
+        try { files = fs.readdirSync(FONTS_DIR).filter(f => FONT_RE.test(f)).sort(); } catch (e) {}
+        return json(res, 200, files);
+      }
+      if (p.startsWith('/fonts/')) {
+        const name = decodeURIComponent(p.slice(7));
+        if (!FONT_RE.test(name) || name.includes('..') || name.includes('/') || name.includes('\\')) {
+          res.writeHead(404); return res.end('not found');
+        }
+        return fs.readFile(path.join(FONTS_DIR, name), (err, data) => {
+          if (err) { res.writeHead(404); return res.end('not found'); }
+          res.writeHead(200, { 'Content-Type': MIME[path.extname(name).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'max-age=3600' });
+          res.end(data);
+        });
+      }
     }
     if (req.method === 'POST' && p === '/api/sources') {
       let body;

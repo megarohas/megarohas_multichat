@@ -32,11 +32,17 @@ const R_ICONS = {
   member: '<svg class="badge" viewBox="0 0 24 24" fill="#2ba640" xmlns="http://www.w3.org/2000/svg"><path d="M12 21S3 14.7 3 8.9C3 5.9 5.4 4 7.9 4c1.6 0 3.1.8 4.1 2.1C13 4.8 14.5 4 16.1 4 18.6 4 21 5.9 21 8.9 21 14.7 12 21 12 21z"/></svg>',
 };
 
-const PALETTE = ['#ff4a80','#ff7f50','#e9a820','#7fd65a','#4adbc8','#57aeff','#9e86ff','#f07fff','#ff6b6b','#6bcb77','#4d96ff','#ffc75f'];
+// Пастельная палитра: ник каждого автора детерминированно получает свой цвет.
+// ?origcolors=1 — уважать «родные» цвета ников (например, выбранные на Twitch).
+const PALETTE = ['#ffb3c1', '#ffd0a8', '#ffe8a3', '#d6eda6', '#aee8c3', '#a3e3e0', '#a8cfff', '#b8bfff', '#d2b0ff', '#efaee4', '#ffb0d5', '#e8d3ab'];
 function autoColor(name) {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
   return PALETTE[h % PALETTE.length];
+}
+const ORIG_COLORS = q.get('origcolors') === '1';
+function nameColor(a) {
+  return (ORIG_COLORS && a.color) ? a.color : autoColor(a.name || '?');
 }
 
 function okUrl(u) { return typeof u === 'string' && /^https:\/\//.test(u); }
@@ -83,7 +89,7 @@ function render(m) {
     }
     const name = el('span', 'name');
     name.textContent = a.name || '?';
-    name.style.color = a.color || autoColor(a.name || '?');
+    name.style.color = nameColor(a);
     div.appendChild(name);
 
     if (m.amount) { const am = el('span', 'amount'); am.textContent = m.amount; div.appendChild(am); }

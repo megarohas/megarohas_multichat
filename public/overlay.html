@@ -15,6 +15,7 @@ const FADE = Math.max(0, +q.get('fade') || 0);      // секунды до ис�
 const SHOW_TS = q.get('ts') === '1';
 const DIR_TOP = (q.get('dir') || '').toLowerCase() === 'top'; // ?dir=top — чат растёт сверху вниз
 const SHOW_PLATFORM = q.get('platform') !== '0'; // ?platform=0 — скрыть значки платформ
+const SHOW_BADGES = q.get('badges') !== '0';     // ?badges=0 — скрыть значки ролей
 
 // ?size=22 — размер шрифта в px; ?font=Имя — шрифт (системный или файл из папки fonts:
 // все файлы *.ttf/otf/woff/woff2 оттуда регистрируются как @font-face,
@@ -109,11 +110,13 @@ function buildMsg(m) {
   if (SHOW_PLATFORM && P_ICONS[m.platform]) div.appendChild(svgSpan(P_ICONS[m.platform]));
   const a = m.author || { name: '?', roles: [] };
   if (okUrl(a.avatar)) { const img = el('img', 'avatar'); img.src = a.avatar; img.onerror = () => img.remove(); div.appendChild(img); }
-  for (const role of a.roles || []) {
-    if (role === 'member' && okUrl(a.badgeUrl)) {
-      const img = el('img', 'badge'); img.src = a.badgeUrl; img.onerror = () => img.remove(); div.appendChild(img);
-    } else if (R_ICONS[role]) {
-      div.appendChild(svgSpan(R_ICONS[role]));
+  if (SHOW_BADGES) {
+    for (const role of a.roles || []) {
+      if (role === 'member' && okUrl(a.badgeUrl)) {
+        const img = el('img', 'badge'); img.src = a.badgeUrl; img.onerror = () => img.remove(); div.appendChild(img);
+      } else if (R_ICONS[role]) {
+        div.appendChild(svgSpan(R_ICONS[role]));
+      }
     }
   }
   const name = el('span', 'name');

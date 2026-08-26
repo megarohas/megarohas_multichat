@@ -51,10 +51,6 @@ const DISSOLVE = parseFloat(cs.getPropertyValue('--dissolve')) || 22;
 // за краем и наползает. Никакого резкого пропадания маски по завершении.
 const MASK_FROM = DIR_TOP ? '0px 0px' : `0px -${DISSOLVE}px`;
 const MASK_TO = DIR_TOP ? `0px -${DISSOLVE}px` : '0px 0px';
-function setMaskPos(node, v) {
-  node.style.webkitMaskPosition = v;
-  node.style.maskPosition = v;
-}
 
 const P_ICONS = {
   twitch: '<svg class="platform" viewBox="0 0 24 24" fill="#a970ff" xmlns="http://www.w3.org/2000/svg"><path d="M2.149 0 .537 4.119v16.836h5.731V24h3.224l3.045-3.045h4.657l6.269-6.269V0H2.149zm19.164 13.612-3.582 3.582h-5.731l-3.045 3.045v-3.045H4.283V2.149h17.03v11.463zM17.687 6.269h-2.149v6.269h2.149V6.269zm-5.731 0h-2.149v6.269h2.149V6.269z"/></svg>',
@@ -161,11 +157,28 @@ function buildMsg(m) {
   return div;
 }
 
-// --- анимации ---
-// Появление: обёртка-«слот» растёт, сообщение материализуется из пустоты,
-// выползая из края чата. Исчезновение: обёртка схлопывается, сообщение
-// дрейфует к краю и растворяется в мягкой маске — целиком, без обрезки
-// «со своего низа».
+// --- анимации (Web Animations API: не зависят от гонок style-recalc,
+// в отличие от CSS-transition на свежевставленных элементах) ---
+// Появление: обёртка-«слот» растёт, сообщение из фейда выползает из края
+// чата; туман держится на кромке первую половину и плавно уезжает за
+// край. Исчезновение: обёртка схлопывается, сообщение дрейфует к краю,
+// гаснет и растворяется в тумане — целиком, без обрезки «со своего низа».
+const EASE = 'cubic-bezier(0.22, 0.61, 0.36, 1)';
+
+function animateMask(wrap, entering) {
+  // enter: туман на кромке (FROM) до середины, потом уезжает (TO);
+  // leave: туман наползает из-за края в первой половине и остаётся.
+  try {
+    const half = ANIM_MS / 2;
+    wrap.animate(
+      { maskPosition: [MASK_FROM, MASK_TO], webkitMaskPosition: [MASK_FROM, MASK_TO] },
+      entering
+        ? { delay: half, duration: half, easing: 'ease', fill: 'both' }
+        : { duration: half, easing: 'ease', fill: 'forwards' }
+    );
+  } catch (e) { /* нет маски — не смертельно */ }
+}
+
 function animateOut(wrap, instant) {
   if (wrap.dataset.out) return;
   wrap.dataset.out = '1';
@@ -173,19 +186,21 @@ function animateOut(wrap, instant) {
   if (instant) { wrap.remove(); return; }
   const inner = wrap.firstElementChild;
   const h = wrap.offsetHeight;
+  const gap = getComputedStyle(wrap).marginTop || GAP + 'px';
   wrap.classList.remove('enter');
   wrap.classList.add('anim', 'leave');
-  wrap.style.height = h + 'px';
-  setMaskPos(wrap, MASK_FROM);
-  void wrap.offsetHeight; // reflow: зафиксировать стартовое состояние
-  wrap.style.height = '0px';
-  wrap.style.marginTop = '0px';
-  setMaskPos(wrap, MASK_TO);
+  wrap.animate(
+    { height: [h + 'px', '0px'], marginTop: [gap, '0px'] },
+    { duration: ANIM_MS, easing: EASE, fill: 'forwards' }
+  );
+  animateMask(wrap, false);
   if (inner) {
-    inner.style.opacity = '0';
-    inner.style.transform = DIR_TOP ? 'translateY(10px)' : 'translateY(-10px)';
+    inner.animate(
+      { opacity: [1, 0], transform: ['none', DIR_TOP ? 'translateY(10px)' : 'translateY(-10px)'] },
+      { duration: ANIM_MS, easing: 'ease', fill: 'forwards' }
+    );
   }
-  setTimeout(() => wrap.remove(), ANIM_MS + 80);
+  setTimeout(() => wrap.remove(), ANIM_MS + 60);
 }
 
 // Убрать всё, что после появления новичка не влезает ЦЕЛИКОМ по высоте
@@ -218,22 +233,15 @@ function place(m, instant) {
   trimAll(instant);
   if (!instant) {
     wrap.classList.add('anim', 'enter');
-    wrap.style.height = '0px';
-    wrap.style.marginTop = '0px';
-    setMaskPos(wrap, MASK_FROM);
-    inner.style.opacity = '0';
-    void wrap.offsetHeight;
-    wrap.style.height = h + 'px';
-    wrap.style.marginTop = '';
-    setMaskPos(wrap, MASK_TO);
-    inner.style.opacity = '';
-    setTimeout(() => {
-      if (!wrap.dataset.out) {
-        wrap.style.height = '';
-        setMaskPos(wrap, '');
-        wrap.classList.remove('anim', 'enter');
-      }
-    }, ANIM_MS + 80);
+    const grow = wrap.animate(
+      { height: ['0px', h + 'px'], marginTop: ['0px', GAP + 'px'] },
+      { duration: ANIM_MS, easing: EASE }
+    );
+    inner.animate({ opacity: [0, 1] }, { duration: ANIM_MS, easing: 'ease' });
+    animateMask(wrap, true);
+    grow.onfinish = () => {
+      if (!wrap.dataset.out) wrap.classList.remove('anim', 'enter');
+    };
   }
   if (FADE > 0) setTimeout(() => animateOut(wrap), FADE * 1000);
 }

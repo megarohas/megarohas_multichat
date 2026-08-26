@@ -70,26 +70,18 @@ html, body {
   margin-top: var(--line-gap);
   max-width: 100%;
 }
-/* Маска-«туман» нарисована на области выше/ниже плашки на --dissolve и
-   анимируется через mask-position: к концу появления туман целиком
-   уезжает за край, поэтому снятие маски по завершении ничего не меняет
-   визуально (нет резкого «пропадания блока с прозрачностью»). */
+/* Сами переходы гоняет JS через Web Animations API (element.animate) —
+   это надёжнее CSS-transition на свежевставленных элементах. Здесь только
+   статика: обрезка и маска-«туман». Маска нарисована на области больше
+   плашки на --dissolve; JS ездит её mask-position так, что к концу
+   появления туман целиком за краем — снятие маски ничего не меняет
+   визуально. */
 .mwrap.anim {
   overflow: hidden;
-  transition:
-    height var(--anim) cubic-bezier(0.22, 0.61, 0.36, 1),
-    margin-top var(--anim) ease,
-    -webkit-mask-position var(--anim) ease,
-    mask-position var(--anim) ease;
   -webkit-mask-repeat: no-repeat;
           mask-repeat: no-repeat;
   -webkit-mask-size: 100% calc(100% + var(--dissolve));
           mask-size: 100% calc(100% + var(--dissolve));
-}
-.mwrap.anim > .msg {
-  transition:
-    opacity var(--anim) ease,
-    transform var(--anim) cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 /* по умолчанию (чат растёт снизу вверх):

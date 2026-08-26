@@ -17,6 +17,18 @@ const FONT_RE = /\.(ttf|otf|woff2?)$/i;
 
 try { fs.mkdirSync(FONTS_DIR, { recursive: true }); } catch (e) {}
 
+// ---------- крешеустойчивость ----------
+// Локальная тулза должна пережить любой неожиданный сбой источника/сети:
+// пишем в error.log и продолжаем работать, а не молча умираем.
+const LOG_PATH = path.join(ROOT, 'error.log');
+function logErr(kind, err) {
+  const line = `[${new Date().toISOString()}] ${kind}: ${(err && err.stack) || err}\n`;
+  try { fs.appendFileSync(LOG_PATH, line); } catch (e) {}
+  console.error(line.trim());
+}
+process.on('uncaughtException', e => logErr('uncaughtException', e));
+process.on('unhandledRejection', e => logErr('unhandledRejection', e));
+
 // ---------- config ----------
 let config = { host: '127.0.0.1', port: 3131, sources: [] };
 try {
@@ -307,7 +319,9 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(404);
     res.end('not found');
   } catch (e) {
-    json(res, 500, { error: e.message });
+    logErr('http', e);
+    if (!res.headersSent) json(res, 500, { error: e.message });
+    else try { res.end(); } catch (e2) {}
   }
 });
 

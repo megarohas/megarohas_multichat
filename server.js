@@ -8,10 +8,20 @@ const crypto = require('crypto');
 const { TwitchSource, channelFromUrl } = require('./lib/twitch');
 const { YouTubeSource } = require('./lib/youtube');
 
+// Когда приложение собрано в единый исполняемый файл (Node SEA, см.
+// build/build.js), статика отдаётся из встроенных ассетов, а изменяемые
+// файлы (config.json, fonts, error.log) живут рядом с бинарником.
+let sea = null;
+try {
+  const s = require('node:sea');
+  if (s.isSea()) sea = s;
+} catch (e) {}
+
 const ROOT = __dirname;
+const APP_DIR = sea ? path.dirname(process.execPath) : ROOT;
 const PUBLIC = path.join(ROOT, 'public');
-const FONTS_DIR = path.join(ROOT, 'fonts');
-const CONFIG_PATH = path.join(ROOT, 'config.json');
+const FONTS_DIR = path.join(APP_DIR, 'fonts');
+const CONFIG_PATH = path.join(APP_DIR, 'config.json');
 const HISTORY_CAP = 100;
 const FONT_RE = /\.(ttf|otf|woff2?)$/i;
 
@@ -20,7 +30,7 @@ try { fs.mkdirSync(FONTS_DIR, { recursive: true }); } catch (e) {}
 // ---------- крешеустойчивость ----------
 // Локальная тулза должна пережить любой неожиданный сбой источника/сети:
 // пишем в error.log и продолжаем работать, а не молча умираем.
-const LOG_PATH = path.join(ROOT, 'error.log');
+const LOG_PATH = path.join(APP_DIR, 'error.log');
 function logErr(kind, err) {
   const line = `[${new Date().toISOString()}] ${kind}: ${(err && err.stack) || err}\n`;
   try { fs.appendFileSync(LOG_PATH, line); } catch (e) {}
@@ -228,10 +238,21 @@ const MIME = {
 };
 
 function serveFile(res, file) {
-  const full = path.join(PUBLIC, file);
-  fs.readFile(full, (err, data) => {
+  const type = MIME[path.extname(file)] || 'application/octet-stream';
+  if (sea) {
+    try {
+      const data = Buffer.from(sea.getRawAsset('public/' + file));
+      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
+      res.end(data);
+    } catch (e) {
+      res.writeHead(404);
+      res.end('not found');
+    }
+    return;
+  }
+  fs.readFile(path.join(PUBLIC, file), (err, data) => {
     if (err) { res.writeHead(404); res.end('not found'); return; }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(full)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
     res.end(data);
   });
 }

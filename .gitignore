@@ -1,0 +1,13 @@
+# портативный Node.js (кладётся рядом, в репо не нужен)
+runtime/
+
+# локальные настройки пользователя (ссылки на каналы и порт)
+config.json
+
+# шрифты пользователь кидает сам
+fonts/*
+!fonts/.gitkeep
+
+node_modules/
+Thumbs.db
+desktop.ini

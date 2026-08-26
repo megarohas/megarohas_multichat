@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>MultiChat Overlay</title>
+<link rel="stylesheet" href="/overlay.css">
+</head>
+<body>
+<div id="chat"></div>
+<script>
+'use strict';
+const q = new URLSearchParams(location.search);
+const LIMIT = Math.max(5, +q.get('limit') || 60);
+const FADE = Math.max(0, +q.get('fade') || 0);   // секунды до исчезновения, 0 = не исчезать
+const SHOW_TS = q.get('ts') === '1';
+
+const chat = document.getElementById('chat');
+const byId = new Map();
+
+const P_ICONS = {
+  twitch: '<svg class="platform" viewBox="0 0 24 24" fill="#a970ff" xmlns="http://www.w3.org/2000/svg"><path d="M2.149 0 .537 4.119v16.836h5.731V24h3.224l3.045-3.045h4.657l6.269-6.269V0H2.149zm19.164 13.612-3.582 3.582h-5.731l-3.045 3.045v-3.045H4.283V2.149h17.03v11.463zM17.687 6.269h-2.149v6.269h2.149V6.269zm-5.731 0h-2.149v6.269h2.149V6.269z"/></svg>',
+  youtube: '<svg class="platform" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="5" width="20" height="14" rx="4" fill="#ff3d3d"/><path d="M10 9.2v5.6l5-2.8z" fill="#fff"/></svg>',
+};
+
+const R_ICONS = {
+  owner: '<svg class="badge" viewBox="0 0 24 24" fill="#ffd166" xmlns="http://www.w3.org/2000/svg"><path d="M12 4 8.6 9.2 3 6.4 5 18h14l2-11.6-5.6 2.8zM5.7 21h12.6v-1.6H5.7z"/></svg>',
+  mod: '<svg class="badge" viewBox="0 0 24 24" fill="#57aeff" xmlns="http://www.w3.org/2000/svg"><path d="M12 2 4 5v6.1C4 16 7.4 20.4 12 22c4.6-1.6 8-6 8-10.9V5z"/></svg>',
+  vip: '<svg class="badge" viewBox="0 0 24 24" fill="#f06fc0" xmlns="http://www.w3.org/2000/svg"><path d="M12 3 4 9.2 12 21l8-11.8z"/></svg>',
+  sub: '<svg class="badge" viewBox="0 0 24 24" fill="#b072ff" xmlns="http://www.w3.org/2000/svg"><path d="m12 2 2.9 6.2 6.6.9-4.9 4.6 1.3 6.6L12 17l-5.9 3.3 1.3-6.6L2.5 9.1l6.6-.9z"/></svg>',
+  verified: '<svg class="badge" viewBox="0 0 24 24" fill="#9aa0a6" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.2 14.6-4.2-4.2 1.7-1.7 2.5 2.5 5.9-5.9 1.7 1.7z"/></svg>',
+  staff: '<svg class="badge" viewBox="0 0 24 24" fill="#9aa0a6" xmlns="http://www.w3.org/2000/svg"><path d="M12 2 4 5v6.1C4 16 7.4 20.4 12 22c4.6-1.6 8-6 8-10.9V5z"/></svg>',
+  member: '<svg class="badge" viewBox="0 0 24 24" fill="#2ba640" xmlns="http://www.w3.org/2000/svg"><path d="M12 21S3 14.7 3 8.9C3 5.9 5.4 4 7.9 4c1.6 0 3.1.8 4.1 2.1C13 4.8 14.5 4 16.1 4 18.6 4 21 5.9 21 8.9 21 14.7 12 21 12 21z"/></svg>',
+};
+
+const PALETTE = ['#ff4a80','#ff7f50','#e9a820','#7fd65a','#4adbc8','#57aeff','#9e86ff','#f07fff','#ff6b6b','#6bcb77','#4d96ff','#ffc75f'];
+function autoColor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return PALETTE[h % PALETTE.length];
+}
+
+function okUrl(u) { return typeof u === 'string' && /^https:\/\//.test(u); }
+
+function hexToRgba(hex, a) {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex || '');
+  if (!m) return 'rgba(255,179,0,' + a + ')';
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+function el(tag, cls) { const e = document.createElement(tag); if (cls) e.className = cls; return e; }
+
+function svgSpan(html) { const s = el('span'); s.innerHTML = html; return s.firstChild; }
+
+function fmtTime(ts) {
+  const d = new Date(ts);
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function render(m) {
+  if (!m || !m.id || byId.has(m.id)) return;
+  const div = el('div', 'msg ' + (m.kind || 'chat') + (m.action ? ' action' : ''));
+  div.dataset.id = m.id;
+  div.dataset.src = m.source || '';
+  if (m.author && m.author.key) div.dataset.key = m.author.key;
+
+  if (m.kind === 'system') {
+    if (P_ICONS[m.platform]) div.appendChild(svgSpan(P_ICONS[m.platform]));
+    const t = el('span', 'text');
+    t.textContent = m.system || '';
+    div.appendChild(t);
+  } else {
+    if (SHOW_TS) { const t = el('span', 'time'); t.textContent = fmtTime(m.ts || Date.now()); div.appendChild(t); }
+    if (P_ICONS[m.platform]) div.appendChild(svgSpan(P_ICONS[m.platform]));
+    const a = m.author || { name: '?', roles: [] };
+    if (okUrl(a.avatar)) { const img = el('img', 'avatar'); img.src = a.avatar; img.onerror = () => img.remove(); div.appendChild(img); }
+    for (const role of a.roles || []) {
+      if (role === 'member' && okUrl(a.badgeUrl)) {
+        const img = el('img', 'badge'); img.src = a.badgeUrl; img.onerror = () => img.remove(); div.appendChild(img);
+      } else if (R_ICONS[role]) {
+        div.appendChild(svgSpan(R_ICONS[role]));
+      }
+    }
+    const name = el('span', 'name');
+    name.textContent = a.name || '?';
+    name.style.color = a.color || autoColor(a.name || '?');
+    div.appendChild(name);
+
+    if (m.amount) { const am = el('span', 'amount'); am.textContent = m.amount; div.appendChild(am); }
+    if (m.system) { const s = el('span', 'text sys'); s.textContent = ' ' + m.system + ' '; div.appendChild(s); }
+
+    for (const p of m.parts || []) {
+      if (p.t === 'text') {
+        const t = el('span', 'text');
+        t.textContent = p.v;
+        div.appendChild(t);
+      } else if (p.t === 'emote' && okUrl(p.url)) {
+        const img = el('img', 'emote');
+        img.src = p.url;
+        img.alt = img.title = p.alt || '';
+        img.onerror = () => { img.replaceWith(document.createTextNode(p.alt || '')); };
+        div.appendChild(img);
+      }
+    }
+    if (okUrl(m.sticker)) { const img = el('img', 'sticker'); img.src = m.sticker; img.onerror = () => img.remove(); div.appendChild(img); }
+    if (m.kind === 'super' && m.colors) {
+      if (m.colors.header) div.style.setProperty('--sc-header', m.colors.header);
+      if (m.colors.body) div.style.setProperty('--sc-body-t', hexToRgba(m.colors.body, 0.3));
+    }
+  }
+
+  chat.appendChild(div);
+  byId.set(m.id, div);
+  while (chat.children.length > LIMIT) {
+    const c = chat.firstChild;
+    byId.delete(c.dataset.id);
+    c.remove();
+  }
+  if (FADE > 0) {
+    setTimeout(() => {
+      div.classList.add('hide');
+      setTimeout(() => { byId.delete(m.id); div.remove(); }, 900);
+    }, FADE * 1000);
+  }
+}
+
+function removeById(id) {
+  const n = byId.get(id);
+  if (n) { n.remove(); byId.delete(id); }
+}
+
+function removeAuthor(source, key) {
+  for (const n of chat.querySelectorAll('.msg')) {
+    if (n.dataset.src === source && n.dataset.key === key) { byId.delete(n.dataset.id); n.remove(); }
+  }
+}
+
+function clearSource(source) {
+  for (const n of [...chat.children]) {
+    if (!source || n.dataset.src === source) { byId.delete(n.dataset.id); n.remove(); }
+  }
+}
+
+const es = new EventSource('/events');
+es.onmessage = e => {
+  let d;
+  try { d = JSON.parse(e.data); } catch (err) { return; }
+  switch (d.type) {
+    case 'hello':
+      clearSource(null);
+      for (const m of d.history || []) render(m);
+      break;
+    case 'msg': render(d); break;
+    case 'remove': removeById(d.id); break;
+    case 'removeAuthor': removeAuthor(d.source, d.key); break;
+    case 'clear': clearSource(d.source || null); break;
+  }
+};
+</script>
+</body>
+</html>

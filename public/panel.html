@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MultiChat — панель</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: #0e1015; color: #e6e8ef;
+    font: 15px/1.45 "Segoe UI", system-ui, sans-serif;
+    max-width: 780px; margin: 0 auto; padding: 28px 20px 60px;
+  }
+  h1 { font-size: 24px; letter-spacing: .3px; }
+  h1 small { color: #6d7488; font-weight: 400; font-size: 14px; margin-left: 8px; }
+  h2 { font-size: 15px; color: #9aa2b8; font-weight: 600; margin-bottom: 10px; }
+  .card { background: #171a22; border: 1px solid #232736; border-radius: 14px; padding: 18px; margin-top: 18px; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; background: #1c202b; margin-bottom: 8px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #666; flex: none; }
+  .dot.live { background: #3fd06c; box-shadow: 0 0 6px #3fd06c88; }
+  .dot.connecting { background: #f0a020; animation: pulse 1.1s infinite; }
+  .dot.error { background: #ff5a5a; }
+  .dot.offline { background: #8a8fa3; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .pf { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; padding: 2px 7px; border-radius: 6px; flex: none; }
+  .pf.twitch { background: #9147ff33; color: #b28aff; }
+  .pf.youtube { background: #ff000028; color: #ff8080; }
+  .src-main { flex: 1; min-width: 0; }
+  .src-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+  .src-state { color: #9aa2b8; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .src-state.error { color: #ff8a8a; }
+  button {
+    background: #262b3a; color: #e6e8ef; border: 1px solid #313850;
+    border-radius: 8px; padding: 7px 12px; cursor: pointer; font: inherit; font-size: 14px; flex: none;
+  }
+  button:hover { background: #303752; }
+  button.icon { padding: 6px 9px; }
+  button.primary { background: #6a4df5; border-color: #7c62ff; }
+  button.primary:hover { background: #7a5eff; }
+  form { display: flex; gap: 10px; margin-top: 4px; }
+  input {
+    flex: 1; background: #12141b; border: 1px solid #2a2f40; color: #e6e8ef;
+    border-radius: 8px; padding: 9px 12px; font: inherit;
+  }
+  input:focus { outline: none; border-color: #6a4df5; }
+  #err { color: #ff8a8a; font-size: 13px; margin-top: 8px; min-height: 18px; }
+  .obs-url { display: flex; gap: 10px; align-items: center; }
+  code {
+    flex: 1; background: #12141b; border: 1px solid #2a2f40; border-radius: 8px;
+    padding: 9px 12px; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .hint { color: #8b93a9; font-size: 13px; margin-top: 10px; }
+  .hint code { display: inline; padding: 1px 5px; font-size: 12px; }
+  iframe { width: 100%; height: 340px; border: 0; border-radius: 10px; background: linear-gradient(135deg, #1a1e28, #10131a); margin-top: 4px; }
+  .empty { color: #6d7488; font-size: 14px; padding: 6px 2px 10px; }
+  .toolbar { display: flex; gap: 10px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<h1>MultiChat <small>чаты Twitch + YouTube в одном оверлее</small></h1>
+
+<div class="card">
+  <h2>Источники</h2>
+  <div id="rows"></div>
+  <div id="empty" class="empty" hidden>Пока пусто — вставь ссылку на стрим или чат ниже.</div>
+  <form id="add">
+    <input id="url" placeholder="twitch.tv/канал  ·  youtube.com/watch?v=…  ·  youtube.com/@канал/live" autocomplete="off">
+    <button class="primary">Добавить</button>
+  </form>
+  <div id="err"></div>
+</div>
+
+<div class="card">
+  <h2>Оверлей для OBS</h2>
+  <div class="obs-url">
+    <code id="ourl">…</code>
+    <button id="copy">Копировать</button>
+  </div>
+  <div class="hint">
+    Добавь в OBS «Браузер» (Browser Source) с этим адресом. Фон прозрачный. Рекомендуемый размер: 450×700.<br>
+    Параметры: <code>?limit=40</code> — макс. сообщений, <code>?fade=20</code> — прятать через N секунд,
+    <code>?ts=1</code> — показывать время. Внешний вид полностью правится в <code>public\overlay.css</code>.
+  </div>
+  <div class="toolbar">
+    <button id="openOverlay">Открыть оверлей</button>
+    <button id="test">Тест-сообщения</button>
+    <button id="clear">Очистить чат</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Предпросмотр</h2>
+  <iframe src="/overlay?limit=25"></iframe>
+</div>
+
+<script>
+'use strict';
+const rows = document.getElementById('rows');
+const emptyEl = document.getElementById('empty');
+const errEl = document.getElementById('err');
+const ourl = document.getElementById('ourl');
+const overlayUrl = location.origin + '/overlay';
+ourl.textContent = overlayUrl;
+
+const STATE_RU = { connecting: 'подключаюсь…', live: 'подключено', offline: 'не в эфире', error: 'ошибка' };
+
+function renderRows(list) {
+  rows.innerHTML = '';
+  emptyEl.hidden = list.length > 0;
+  for (const s of list) {
+    const row = document.createElement('div');
+    row.className = 'row';
+
+    const dot = document.createElement('span');
+    dot.className = 'dot ' + s.state;
+    row.appendChild(dot);
+
+    const pf = document.createElement('span');
+    pf.className = 'pf ' + s.platform;
+    pf.textContent = s.platform;
+    row.appendChild(pf);
+
+    const main = document.createElement('div');
+    main.className = 'src-main';
+    const u = document.createElement('div');
+    u.className = 'src-url';
+    u.textContent = s.url;
+    u.title = s.url;
+    const st = document.createElement('div');
+    st.className = 'src-state' + (s.state === 'error' ? ' error' : '');
+    const chan = s.channel && s.channel !== s.platform ? s.channel + ' — ' : '';
+    st.textContent = chan + (STATE_RU[s.state] || s.state) + (s.detail ? ' · ' + s.detail : '');
+    st.title = st.textContent;
+    main.appendChild(u);
+    main.appendChild(st);
+    row.appendChild(main);
+
+    const re = document.createElement('button');
+    re.className = 'icon';
+    re.textContent = '⟳';
+    re.title = 'Переподключить';
+    re.onclick = () => fetch('/api/sources/' + s.id + '/reconnect', { method: 'POST' });
+    row.appendChild(re);
+
+    const del = document.createElement('button');
+    del.className = 'icon';
+    del.textContent = '✕';
+    del.title = 'Удалить';
+    del.onclick = () => fetch('/api/sources/' + s.id, { method: 'DELETE' });
+    row.appendChild(del);
+
+    rows.appendChild(row);
+  }
+}
+
+document.getElementById('add').addEventListener('submit', async e => {
+  e.preventDefault();
+  const input = document.getElementById('url');
+  const url = input.value.trim();
+  if (!url) return;
+  errEl.textContent = '';
+  const r = await fetch('/api/sources', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ url }),
+  });
+  const j = await r.json();
+  if (j.error) errEl.textContent = j.error;
+  else input.value = '';
+});
+
+document.getElementById('copy').onclick = async () => {
+  try { await navigator.clipboard.writeText(overlayUrl); } catch (e) {}
+  const b = document.getElementById('copy');
+  b.textContent = 'Скопировано ✓';
+  setTimeout(() => { b.textContent = 'Копировать'; }, 1500);
+};
+document.getElementById('openOverlay').onclick = () => window.open(overlayUrl, '_blank');
+document.getElementById('test').onclick = () => fetch('/api/test', { method: 'POST' });
+document.getElementById('clear').onclick = () => fetch('/api/clear', { method: 'POST' });
+
+fetch('/api/state').then(r => r.json()).then(s => renderRows(s.sources));
+const es = new EventSource('/events');
+es.onmessage = e => {
+  let d;
+  try { d = JSON.parse(e.data); } catch (err) { return; }
+  if (d.type === 'status') renderRows(d.sources);
+  else if (d.type === 'hello') renderRows(d.sources || []);
+};
+</script>
+</body>
+</html>

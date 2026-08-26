@@ -1,0 +1,14 @@
+{
+  "name": "multichat",
+  "version": "0.1.0",
+  "description": "Локальный агрегатор чатов Twitch и YouTube в один OBS-оверлей — без API-ключей и сторонних сервисов",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "private": true
+}

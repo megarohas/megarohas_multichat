@@ -1,0 +1,155 @@
+/* ============================================================
+   MultiChat — стиль оверлея для OBS.
+   Этот файл можно свободно редактировать: сохранил — в OBS
+   нажми «Обновить» у browser source (или страница сама
+   подтянет стиль при перезагрузке).
+   Фон страницы прозрачный — в OBS будет виден только чат.
+   ============================================================ */
+
+:root {
+  /* --- базовые ручки, крути здесь --- */
+  --font: "Segoe UI", "Inter", system-ui, sans-serif;
+  --size: 17px;             /* размер текста сообщений (перекрывается ?size=N) */
+  --anim: 320ms;            /* длительность анимаций появления/исчезновения */
+  --line-gap: 6px;          /* расстояние между сообщениями */
+  --pad: 7px 12px;          /* внутренние отступы плашки */
+  --radius: 10px;           /* скругление плашки */
+  --bg: rgba(10, 10, 14, 0.62);   /* фон обычного сообщения */
+  --text: #ffffff;
+  --name-weight: 700;
+  --emote-size: 1.55em;     /* высота смайлов/эмоутов */
+  --shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  --sys-color: #c8c8d8;     /* цвет системных строк (сабы, рейды) */
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  background: transparent;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* Колонка чата прижата к низу, старое уезжает вверх и удаляется */
+#chat {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100vh;
+  padding: 10px;
+  font-family: var(--font);
+  font-size: var(--size);
+  color: var(--text);
+}
+
+/* --- сообщение --- */
+.msg {
+  background: var(--bg);
+  border-radius: var(--radius);
+  padding: var(--pad);
+  margin-top: var(--line-gap);
+  box-shadow: var(--shadow);
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+  align-self: flex-start;   /* плашка по ширине текста; замени на stretch для полной ширины */
+  max-width: 100%;
+}
+
+/* Появление и исчезновение анимируются из JS через этот класс:
+   новое сообщение плавно вырастает и выплывает снизу из фейда,
+   удаляемое — схлопывается и уплывает вверх в фейд. Транзишены на
+   transform/opacity композитятся GPU, высота меняется у 1-2 элементов
+   за раз — стабильные 60 fps. */
+.msg.anim {
+  overflow: hidden;
+  transition:
+    height var(--anim) cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity var(--anim) ease,
+    transform var(--anim) cubic-bezier(0.22, 0.61, 0.36, 1),
+    padding-top var(--anim) ease,
+    padding-bottom var(--anim) ease,
+    margin-top var(--anim) ease;
+}
+.msg.out { opacity: 0; transform: translateY(-16px); }
+
+/* --- автор --- */
+.name {
+  font-weight: var(--name-weight);
+  margin-right: 2px;
+}
+.name::after { content: ":"; color: var(--text); font-weight: 400; margin-left: 1px; }
+
+/* иконка платформы перед ником */
+.platform {
+  width: 0.9em; height: 0.9em;
+  vertical-align: -0.08em;
+  margin-right: 5px;
+  opacity: 0.9;
+}
+/* не нужна иконка платформы? раскомментируй:
+.platform { display: none; }
+*/
+
+/* значки ролей (модер, владелец, VIP, саб, спонсор) */
+.badge {
+  width: 1em; height: 1em;
+  vertical-align: -0.14em;
+  margin-right: 4px;
+}
+img.badge { border-radius: 3px; }
+
+/* аватарки (есть только у YouTube) — по умолчанию выключены
+.avatar {
+  width: 1.4em; height: 1.4em;
+  border-radius: 50%;
+  vertical-align: -0.35em;
+  margin-right: 6px;
+}
+*/
+.avatar { display: none; }
+
+/* --- текст и эмоуты --- */
+.emote {
+  height: var(--emote-size);
+  vertical-align: -0.45em;
+  margin: -0.2em 1px;
+}
+.msg.action .text { font-style: italic; }
+
+/* время (включается ?ts=1) */
+.time { font-size: 0.75em; opacity: 0.55; margin-right: 6px; }
+
+/* --- системные строки: сабы, рейды, membership --- */
+.msg.system {
+  background: rgba(10, 10, 14, 0.45);
+  color: var(--sys-color);
+  font-style: italic;
+  font-size: 0.9em;
+}
+
+/* --- Super Chat / Super Sticker --- */
+.msg.super {
+  border-left: 4px solid var(--sc-header, #ffb300);
+  background: linear-gradient(90deg, var(--sc-body-t, rgba(255, 179, 0, 0.28)), var(--bg) 65%);
+}
+.amount {
+  display: inline-block;
+  font-weight: 800;
+  background: var(--sc-header, #ffb300);
+  color: #111;
+  border-radius: 6px;
+  padding: 0 6px;
+  margin-right: 6px;
+  font-size: 0.85em;
+}
+.sticker { height: 3em; display: block; margin-top: 4px; }
+
+/* --- новое членство/спонсорство --- */
+.msg.member {
+  border-left: 4px solid #2ba640;
+  background: linear-gradient(90deg, rgba(43, 166, 64, 0.25), var(--bg) 65%);
+}
+
+/* цвета ников по умолчанию, если платформа цвет не дала,
+   назначаются автоматически из палитры ниже (data-hue) */

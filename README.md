@@ -24,13 +24,21 @@
    распакуй так, чтобы получилось `runtime\node\node.exe` рядом с `server.js`.
 2. **Системный**: просто установи Node.js.
 
-Дальше:
+Дальше — Windows:
 
 ```bat
 start.cmd
 ```
 
-(он сам возьмёт `runtime\node\node.exe`, если тот есть, иначе системный `node`).
+Linux / macOS:
+
+```bash
+./start.sh
+```
+
+(оба скрипта сами берут портативный Node из `runtime/node`, если он лежит
+рядом — на Windows `runtime\node\node.exe`, на Linux/macOS
+`runtime/node/bin/node`, — иначе системный `node`).
 
 - Панель управления: **http://127.0.0.1:3131/**
 - Оверлей для OBS: **http://127.0.0.1:3131/overlay**

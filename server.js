@@ -42,7 +42,8 @@ process.on('unhandledRejection', e => logErr('unhandledRejection', e));
 // ---------- config ----------
 let config = { host: '127.0.0.1', port: 3131, sources: [] };
 try {
-  const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+  // Блокнот и PowerShell любят сохранять UTF-8 с BOM — срезаем
+  const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8').replace(/^\uFEFF/, ''));
   config = { ...config, ...raw };
   if (!Array.isArray(config.sources)) config.sources = [];
 } catch (e) { /* first run */ }

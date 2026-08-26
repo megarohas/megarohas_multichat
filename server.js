@@ -1,5 +1,5 @@
 'use strict';
-// MultiChat — local multi-platform stream chat aggregator for OBS.
+// megarohas_multichat — local multi-platform stream chat aggregator for OBS.
 // Zero dependencies: plain Node http + SSE, anonymous Twitch IRC, YouTube InnerTube polling.
 const http = require('http');
 const fs = require('fs');
@@ -313,14 +313,14 @@ const server = http.createServer(async (req, res) => {
 
 server.on('error', e => {
   if (e.code === 'EADDRINUSE') {
-    console.error(`Порт ${config.port} занят — возможно, MultiChat уже запущен. Закрой старый процесс или поменяй port в config.json.`);
+    console.error(`Порт ${config.port} занят — возможно, megarohas_multichat уже запущен. Закрой старый процесс или поменяй port в config.json.`);
     process.exit(1);
   }
   throw e;
 });
 
 server.listen(config.port, config.host, () => {
-  console.log('MultiChat запущен:');
+  console.log('megarohas_multichat запущен:');
   console.log(`  Панель управления: http://${config.host}:${config.port}/`);
   console.log(`  Оверлей для OBS:   http://${config.host}:${config.port}/overlay`);
   for (const s of config.sources) {

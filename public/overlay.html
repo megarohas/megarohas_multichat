@@ -42,6 +42,19 @@ const byId = new Map();
 const cs = getComputedStyle(document.documentElement);
 const ANIM_MS = parseFloat(cs.getPropertyValue('--anim')) || 320;
 const GAP = parseFloat(cs.getPropertyValue('--line-gap')) || 6;
+const DISSOLVE = parseFloat(cs.getPropertyValue('--dissolve')) || 22;
+
+// Маска-«туман» нарисована на области больше плашки на --dissolve и ездит
+// через mask-position. Направления градиентов в CSS подобраны так, что
+// у обеих фаз один и тот же путь FROM→TO: при появлении туман стартует
+// на «дышащем» крае и рассасывается за него, при исчезновении — стартует
+// за краем и наползает. Никакого резкого пропадания маски по завершении.
+const MASK_FROM = DIR_TOP ? '0px 0px' : `0px -${DISSOLVE}px`;
+const MASK_TO = DIR_TOP ? `0px -${DISSOLVE}px` : '0px 0px';
+function setMaskPos(node, v) {
+  node.style.webkitMaskPosition = v;
+  node.style.maskPosition = v;
+}
 
 const P_ICONS = {
   twitch: '<svg class="platform" viewBox="0 0 24 24" fill="#a970ff" xmlns="http://www.w3.org/2000/svg"><path d="M2.149 0 .537 4.119v16.836h5.731V24h3.224l3.045-3.045h4.657l6.269-6.269V0H2.149zm19.164 13.612-3.582 3.582h-5.731l-3.045 3.045v-3.045H4.283V2.149h17.03v11.463zM17.687 6.269h-2.149v6.269h2.149V6.269zm-5.731 0h-2.149v6.269h2.149V6.269z"/></svg>',
@@ -163,9 +176,11 @@ function animateOut(wrap, instant) {
   wrap.classList.remove('enter');
   wrap.classList.add('anim', 'leave');
   wrap.style.height = h + 'px';
+  setMaskPos(wrap, MASK_FROM);
   void wrap.offsetHeight; // reflow: зафиксировать стартовое состояние
   wrap.style.height = '0px';
   wrap.style.marginTop = '0px';
+  setMaskPos(wrap, MASK_TO);
   if (inner) {
     inner.style.opacity = '0';
     inner.style.transform = DIR_TOP ? 'translateY(10px)' : 'translateY(-10px)';
@@ -205,14 +220,17 @@ function place(m, instant) {
     wrap.classList.add('anim', 'enter');
     wrap.style.height = '0px';
     wrap.style.marginTop = '0px';
+    setMaskPos(wrap, MASK_FROM);
     inner.style.opacity = '0';
     void wrap.offsetHeight;
     wrap.style.height = h + 'px';
     wrap.style.marginTop = '';
+    setMaskPos(wrap, MASK_TO);
     inner.style.opacity = '';
     setTimeout(() => {
       if (!wrap.dataset.out) {
         wrap.style.height = '';
+        setMaskPos(wrap, '');
         wrap.classList.remove('anim', 'enter');
       }
     }, ANIM_MS + 80);

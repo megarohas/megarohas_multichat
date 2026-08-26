@@ -10,9 +10,10 @@
 <script>
 'use strict';
 const q = new URLSearchParams(location.search);
-const LIMIT = Math.max(5, +q.get('limit') || 60);
-const FADE = Math.max(0, +q.get('fade') || 0);   // секунды до исчезновения, 0 = не исчезать
+const LIMIT = Math.max(5, +q.get('limit') || 60);   // страховочный потолок по количеству в DOM
+const FADE = Math.max(0, +q.get('fade') || 0);      // секунды до исчезновения, 0 = не исчезать
 const SHOW_TS = q.get('ts') === '1';
+const DIR_TOP = (q.get('dir') || '').toLowerCase() === 'top'; // ?dir=top — чат растёт сверху вниз
 
 // ?size=22 — размер шрифта в px; ?font=Имя — шрифт (системный или файл из папки fonts:
 // все файлы *.ttf/otf/woff/woff2 оттуда регистрируются как @font-face,
@@ -32,8 +33,13 @@ fetch('/api/fonts').then(r => r.json()).then(files => {
   }
 }).catch(() => {});
 
+if (DIR_TOP) document.body.classList.add('dir-top');
+
 const chat = document.getElementById('chat');
 const byId = new Map();
+const cs = getComputedStyle(document.documentElement);
+const ANIM_MS = parseFloat(cs.getPropertyValue('--anim')) || 320;
+const GAP = parseFloat(cs.getPropertyValue('--line-gap')) || 6;
 
 const P_ICONS = {
   twitch: '<svg class="platform" viewBox="0 0 24 24" fill="#a970ff" xmlns="http://www.w3.org/2000/svg"><path d="M2.149 0 .537 4.119v16.836h5.731V24h3.224l3.045-3.045h4.657l6.269-6.269V0H2.149zm19.164 13.612-3.582 3.582h-5.731l-3.045 3.045v-3.045H4.283V2.149h17.03v11.463zM17.687 6.269h-2.149v6.269h2.149V6.269zm-5.731 0h-2.149v6.269h2.149V6.269z"/></svg>',
@@ -81,8 +87,8 @@ function fmtTime(ts) {
   return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
 }
 
-function render(m) {
-  if (!m || !m.id || byId.has(m.id)) return;
+// --- построение DOM сообщения (без вставки на страницу) ---
+function buildMsg(m) {
   const div = el('div', 'msg ' + (m.kind || 'chat') + (m.action ? ' action' : ''));
   div.dataset.id = m.id;
   div.dataset.src = m.source || '';
@@ -93,77 +99,172 @@ function render(m) {
     const t = el('span', 'text');
     t.textContent = m.system || '';
     div.appendChild(t);
-  } else {
-    if (SHOW_TS) { const t = el('span', 'time'); t.textContent = fmtTime(m.ts || Date.now()); div.appendChild(t); }
-    if (P_ICONS[m.platform]) div.appendChild(svgSpan(P_ICONS[m.platform]));
-    const a = m.author || { name: '?', roles: [] };
-    if (okUrl(a.avatar)) { const img = el('img', 'avatar'); img.src = a.avatar; img.onerror = () => img.remove(); div.appendChild(img); }
-    for (const role of a.roles || []) {
-      if (role === 'member' && okUrl(a.badgeUrl)) {
-        const img = el('img', 'badge'); img.src = a.badgeUrl; img.onerror = () => img.remove(); div.appendChild(img);
-      } else if (R_ICONS[role]) {
-        div.appendChild(svgSpan(R_ICONS[role]));
-      }
-    }
-    const name = el('span', 'name');
-    name.textContent = a.name || '?';
-    name.style.color = nameColor(a);
-    div.appendChild(name);
-
-    if (m.amount) { const am = el('span', 'amount'); am.textContent = m.amount; div.appendChild(am); }
-    if (m.system) { const s = el('span', 'text sys'); s.textContent = ' ' + m.system + ' '; div.appendChild(s); }
-
-    for (const p of m.parts || []) {
-      if (p.t === 'text') {
-        const t = el('span', 'text');
-        t.textContent = p.v;
-        div.appendChild(t);
-      } else if (p.t === 'emote' && okUrl(p.url)) {
-        const img = el('img', 'emote');
-        img.src = p.url;
-        img.alt = img.title = p.alt || '';
-        img.onerror = () => { img.replaceWith(document.createTextNode(p.alt || '')); };
-        div.appendChild(img);
-      }
-    }
-    if (okUrl(m.sticker)) { const img = el('img', 'sticker'); img.src = m.sticker; img.onerror = () => img.remove(); div.appendChild(img); }
-    if (m.kind === 'super' && m.colors) {
-      if (m.colors.header) div.style.setProperty('--sc-header', m.colors.header);
-      if (m.colors.body) div.style.setProperty('--sc-body-t', hexToRgba(m.colors.body, 0.3));
-    }
+    return div;
   }
 
-  chat.appendChild(div);
-  byId.set(m.id, div);
-  while (chat.children.length > LIMIT) {
-    const c = chat.firstChild;
-    byId.delete(c.dataset.id);
-    c.remove();
+  if (SHOW_TS) { const t = el('span', 'time'); t.textContent = fmtTime(m.ts || Date.now()); div.appendChild(t); }
+  if (P_ICONS[m.platform]) div.appendChild(svgSpan(P_ICONS[m.platform]));
+  const a = m.author || { name: '?', roles: [] };
+  if (okUrl(a.avatar)) { const img = el('img', 'avatar'); img.src = a.avatar; img.onerror = () => img.remove(); div.appendChild(img); }
+  for (const role of a.roles || []) {
+    if (role === 'member' && okUrl(a.badgeUrl)) {
+      const img = el('img', 'badge'); img.src = a.badgeUrl; img.onerror = () => img.remove(); div.appendChild(img);
+    } else if (R_ICONS[role]) {
+      div.appendChild(svgSpan(R_ICONS[role]));
+    }
   }
-  if (FADE > 0) {
-    setTimeout(() => {
-      div.classList.add('hide');
-      setTimeout(() => { byId.delete(m.id); div.remove(); }, 900);
-    }, FADE * 1000);
+  const name = el('span', 'name');
+  name.textContent = a.name || '?';
+  name.style.color = nameColor(a);
+  div.appendChild(name);
+
+  if (m.amount) { const am = el('span', 'amount'); am.textContent = m.amount; div.appendChild(am); }
+  if (m.system) { const s = el('span', 'text sys'); s.textContent = ' ' + m.system + ' '; div.appendChild(s); }
+
+  for (const p of m.parts || []) {
+    if (p.t === 'text') {
+      const t = el('span', 'text');
+      t.textContent = p.v;
+      div.appendChild(t);
+    } else if (p.t === 'emote' && okUrl(p.url)) {
+      const img = el('img', 'emote');
+      img.src = p.url;
+      img.alt = img.title = p.alt || '';
+      img.onerror = () => { img.replaceWith(document.createTextNode(p.alt || '')); };
+      div.appendChild(img);
+    }
+  }
+  if (okUrl(m.sticker)) { const img = el('img', 'sticker'); img.src = m.sticker; img.onerror = () => img.remove(); div.appendChild(img); }
+  if (m.kind === 'super' && m.colors) {
+    if (m.colors.header) div.style.setProperty('--sc-header', m.colors.header);
+    if (m.colors.body) div.style.setProperty('--sc-body-t', hexToRgba(m.colors.body, 0.3));
+  }
+  return div;
+}
+
+// --- анимации ---
+// Появление: сообщение плавно вырастает и выплывает из фейда (60 fps:
+// transform/opacity композитятся, высота меняется у одного элемента).
+// Исчезновение: плавно схлопывается и уплывает в фейд — целиком, без обрезки.
+function animateOut(div, instant) {
+  if (div.dataset.out) return;
+  div.dataset.out = '1';
+  byId.delete(div.dataset.id);
+  if (instant) { div.remove(); return; }
+  const h = div.offsetHeight;
+  div.classList.add('anim');
+  div.style.height = h + 'px';
+  void div.offsetHeight; // reflow: зафиксировать стартовое состояние
+  div.classList.add('out');
+  div.style.height = '0px';
+  div.style.paddingTop = '0px';
+  div.style.paddingBottom = '0px';
+  div.style.marginTop = '0px';
+  setTimeout(() => div.remove(), ANIM_MS + 60);
+}
+
+// Убрать всё, что после появления новичка не влезает ЦЕЛИКОМ по высоте
+// (и страховочный лимит по количеству). Считаем по финальным высотам
+// (dataset.h), а не по текущим кадрам анимации — детерминированно.
+function trimAll(instant) {
+  const live = [...chat.children].filter(c => !c.dataset.out);
+  const newestFirst = DIR_TOP ? live : live.reverse();
+  const avail = window.innerHeight - 20; // паддинги контейнера
+  let used = 0;
+  for (let i = 0; i < newestFirst.length; i++) {
+    const c = newestFirst[i];
+    used += (+c.dataset.h || c.offsetHeight) + GAP;
+    if (i > 0 && (used > avail || i >= LIMIT)) animateOut(c, instant);
   }
 }
 
+function place(div, instant) {
+  if (DIR_TOP) chat.insertBefore(div, chat.firstChild);
+  else chat.appendChild(div);
+  byId.set(div.dataset.id, div);
+  const h = div.offsetHeight;
+  div.dataset.h = h;
+  trimAll(instant);
+  if (!instant) {
+    div.classList.add('anim');
+    div.style.height = '0px';
+    div.style.opacity = '0';
+    div.style.transform = DIR_TOP ? 'translateY(-18px)' : 'translateY(18px)';
+    div.style.paddingTop = '0px';
+    div.style.paddingBottom = '0px';
+    div.style.marginTop = '0px';
+    void div.offsetHeight;
+    div.style.height = h + 'px';
+    div.style.opacity = '';
+    div.style.transform = '';
+    div.style.paddingTop = '';
+    div.style.paddingBottom = '';
+    div.style.marginTop = '';
+    setTimeout(() => {
+      if (!div.dataset.out) { div.style.height = ''; div.classList.remove('anim'); }
+    }, ANIM_MS + 60);
+  }
+  if (FADE > 0) setTimeout(() => animateOut(div), FADE * 1000);
+}
+
+// --- очередь показа: в память сообщения приходят пачками (особенно с
+// YouTube), на экран выдаются строго по одному. Темп подстраивается под
+// длину очереди, чтобы не отставать от живого чата. ---
+const queue = [];
+let pumping = false;
+
+function pace() {
+  if (queue.length > 25) return 50;
+  if (queue.length > 10) return 90;
+  return 160;
+}
+
+function pump() {
+  if (pumping) return;
+  pumping = true;
+  (function step() {
+    const m = queue.shift();
+    if (!m) { pumping = false; return; }
+    place(buildMsg(m), false);
+    setTimeout(step, pace());
+  })();
+}
+
+function enqueue(m) {
+  if (!m || !m.id || byId.has(m.id) || queue.some(x => x.id === m.id)) return;
+  queue.push(m);
+  if (queue.length > 80) queue.splice(0, queue.length - 80);
+  pump();
+}
+
+// --- удаления (модерация) ---
 function removeById(id) {
   const n = byId.get(id);
-  if (n) { n.remove(); byId.delete(id); }
+  if (n) animateOut(n);
+  const qi = queue.findIndex(x => x.id === id);
+  if (qi !== -1) queue.splice(qi, 1);
 }
 
 function removeAuthor(source, key) {
-  for (const n of chat.querySelectorAll('.msg')) {
-    if (n.dataset.src === source && n.dataset.key === key) { byId.delete(n.dataset.id); n.remove(); }
+  for (const n of [...chat.children]) {
+    if (n.dataset.src === source && n.dataset.key === key) animateOut(n);
+  }
+  for (let i = queue.length - 1; i >= 0; i--) {
+    const m = queue[i];
+    if (m.source === source && m.author && m.author.key === key) queue.splice(i, 1);
   }
 }
 
-function clearSource(source) {
+function clearSource(source, instant) {
   for (const n of [...chat.children]) {
-    if (!source || n.dataset.src === source) { byId.delete(n.dataset.id); n.remove(); }
+    if (!source || n.dataset.src === source) animateOut(n, instant);
+  }
+  for (let i = queue.length - 1; i >= 0; i--) {
+    if (!source || queue[i].source === source) queue.splice(i, 1);
   }
 }
+
+window.addEventListener('resize', () => trimAll());
 
 const es = new EventSource('/events');
 es.onmessage = e => {
@@ -171,10 +272,12 @@ es.onmessage = e => {
   try { d = JSON.parse(e.data); } catch (err) { return; }
   switch (d.type) {
     case 'hello':
-      clearSource(null);
-      for (const m of d.history || []) render(m);
+      clearSource(null, true);
+      for (const m of d.history || []) {
+        if (!byId.has(m.id)) place(buildMsg(m), true);
+      }
       break;
-    case 'msg': render(d); break;
+    case 'msg': enqueue(d); break;
     case 'remove': removeById(d.id); break;
     case 'removeAuthor': removeAuthor(d.source, d.key); break;
     case 'clear': clearSource(d.source || null); break;

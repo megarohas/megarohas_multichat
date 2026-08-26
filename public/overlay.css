@@ -73,6 +73,11 @@ html, body {
 }
 .msg.out { opacity: 0; transform: translateY(-16px); }
 
+/* ?dir=top — чат прижат к верху, новые сообщения появляются сверху,
+   старые уплывают вниз */
+body.dir-top #chat { justify-content: flex-start; }
+body.dir-top .msg.out { transform: translateY(16px); }
+
 /* --- автор --- */
 .name {
   font-weight: var(--name-weight);

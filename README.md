@@ -17,7 +17,18 @@
 
 ## Запуск
 
-Нужен Node.js 18+. Есть два пути:
+Самый простой путь — **готовый бинарник** со страницы
+[Releases](https://github.com/megarohas/megarohas_multichat/releases):
+один исполняемый файл, ничего устанавливать не нужно. `config.json`,
+папка `fonts` и `error.log` появятся рядом с ним.
+
+- Windows: `megarohas_multichat-win-x64.exe` — просто запусти.
+- Linux: `chmod +x megarohas_multichat-linux-x64 && ./megarohas_multichat-linux-x64`
+- macOS: снять карантин и запустить (бинарник подписан ad-hoc, поэтому при
+  первом запуске — правый клик → «Открыть», либо `xattr -d com.apple.quarantine <файл>`).
+  Сборки для macOS/Linux кросс-собраны и обкатаны меньше винды — если что, issue.
+
+Запуск из исходников — нужен Node.js 18+, есть два пути:
 
 1. **Портативный** (ничего не ставится в систему): скачай zip с
    [nodejs.org](https://nodejs.org/en/download) («Standalone / Binary», Windows x64),
@@ -91,6 +102,19 @@ Linux / macOS:
   обновить `lib/youtube.js` (там прокомментирована актуальная схема).
 - Сервер раздаёт панель и оверлей и пушит сообщения по SSE. Всё локально;
   наружу уходят только запросы к самим Twitch/YouTube.
+
+## Сборка бинарников
+
+```bash
+node build/build.js all
+```
+
+`server.js` склеивается esbuild-ом в один файл, из него и `public/*`
+генерируется блоб Node SEA (Single Executable Application) и инжектится в
+официальные бинарники Node — Windows, Linux и macOS собираются с одной
+машины (macOS подписывается ad-hoc через rcodesign). Результат — в `dist/`.
+Нужен интернет; инструменты сборки ставятся в `build/node_modules` и на
+готовое приложение не влияют.
 
 ## Ограничения
 

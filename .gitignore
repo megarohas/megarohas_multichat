@@ -12,3 +12,11 @@ fonts/*
 node_modules/
 Thumbs.db
 desktop.ini
+
+# артефакты сборки бинарников
+dist/
+build/cache/
+build/bundle.js
+build/sea-config.json
+build/sea-prep.blob
+build/package-lock.json

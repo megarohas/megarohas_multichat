@@ -10,7 +10,7 @@
   /* --- базовые ручки, крути здесь --- */
   --font: "Segoe UI", "Inter", system-ui, sans-serif;
   --size: 17px;             /* размер текста сообщений (перекрывается ?size=N) */
-  --anim: 320ms;            /* длительность анимаций появления/исчезновения */
+  --anim: 380ms;            /* длительность анимаций появления/исчезновения */
   --line-gap: 6px;          /* расстояние между сообщениями */
   --pad: 7px 12px;          /* внутренние отступы плашки */
   --radius: 10px;           /* скругление плашки */
@@ -47,7 +47,6 @@ html, body {
   background: var(--bg);
   border-radius: var(--radius);
   padding: var(--pad);
-  margin-top: var(--line-gap);
   box-shadow: var(--shadow);
   word-wrap: break-word;
   overflow-wrap: anywhere;
@@ -56,27 +55,60 @@ html, body {
   max-width: 100%;
 }
 
-/* Появление и исчезновение анимируются из JS через этот класс:
-   новое сообщение плавно вырастает и выплывает снизу из фейда,
-   удаляемое — схлопывается и уплывает вверх в фейд. Транзишены на
-   transform/opacity композитятся GPU, высота меняется у 1-2 элементов
+/* --- обёртка-«слот»: механика появления/исчезновения ---
+   Каждое сообщение лежит в .mwrap. При появлении обёртка растёт по
+   высоте, и сообщение выползает из края чата, материализуясь из пустоты;
+   при исчезновении обёртка схлопывается, и сообщение растворяется у
+   края — мягкая градиентная маска вместо жёсткой обрезки. Куда прижат
+   контент внутри обёртки (enter/leave), решает, какой край «дышит».
+   transform/opacity композитятся GPU; высота меняется у 1-2 элементов
    за раз — стабильные 60 fps. */
-.msg.anim {
+.mwrap {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--line-gap);
+  max-width: 100%;
+}
+.mwrap.anim {
   overflow: hidden;
   transition:
     height var(--anim) cubic-bezier(0.22, 0.61, 0.36, 1),
-    opacity var(--anim) ease,
-    transform var(--anim) cubic-bezier(0.22, 0.61, 0.36, 1),
-    padding-top var(--anim) ease,
-    padding-bottom var(--anim) ease,
     margin-top var(--anim) ease;
 }
-.msg.out { opacity: 0; transform: translateY(-16px); }
+.mwrap.anim > .msg {
+  transition:
+    opacity var(--anim) ease,
+    transform var(--anim) cubic-bezier(0.22, 0.61, 0.36, 1);
+}
 
-/* ?dir=top — чат прижат к верху, новые сообщения появляются сверху,
-   старые уплывают вниз */
+/* по умолчанию (чат растёт снизу вверх):
+   появление — сообщение выползает из нижнего края (контент прижат к
+   верху обёртки, мягкий нижний край);
+   исчезновение — растворяется верхом (контент прижат к низу, мягкий
+   верхний край) */
+.mwrap.enter {
+  justify-content: flex-start;
+  -webkit-mask-image: linear-gradient(to top, transparent 0, #000 22px);
+          mask-image: linear-gradient(to top, transparent 0, #000 22px);
+}
+.mwrap.leave {
+  justify-content: flex-end;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
+          mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
+}
+
+/* ?dir=top — чат растёт сверху вниз, всё зеркально */
 body.dir-top #chat { justify-content: flex-start; }
-body.dir-top .msg.out { transform: translateY(16px); }
+body.dir-top .mwrap.enter {
+  justify-content: flex-end;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
+          mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
+}
+body.dir-top .mwrap.leave {
+  justify-content: flex-start;
+  -webkit-mask-image: linear-gradient(to top, transparent 0, #000 22px);
+          mask-image: linear-gradient(to top, transparent 0, #000 22px);
+}
 
 /* --- автор --- */
 .name {

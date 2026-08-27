@@ -40,7 +40,8 @@ async function download(url, dest) {
 }
 
 function ensureDeps() {
-  if (fs.existsSync(path.join(BUILD, 'node_modules', 'postject'))) return;
+  if (fs.existsSync(path.join(BUILD, 'node_modules', 'postject'))
+    && fs.existsSync(path.join(BUILD, 'node_modules', 'rcedit'))) return;
   log('npm install (esbuild + postject)…');
   const nodeDir = path.dirname(process.execPath);
   const npm = path.join(nodeDir, process.platform === 'win32' ? 'npm.cmd' : 'npm');
@@ -123,6 +124,13 @@ async function getRcodesign() {
 async function buildWin() {
   const out = path.join(DIST, APP + '-win-x64.exe');
   fs.copyFileSync(process.execPath, out);
+  // иконка — ДО инъекции блоба, чтобы не трогать PE после postject
+  const ico = path.join(ROOT, 'assets', 'icon.ico');
+  if (process.platform === 'win32' && fs.existsSync(ico)) {
+    log('ставлю иконку (rcedit)…');
+    const rcedit = require(path.join(BUILD, 'node_modules', 'rcedit'));
+    await rcedit(out, { icon: ico });
+  }
   inject(out, false);
   log('готово: ' + out);
 }

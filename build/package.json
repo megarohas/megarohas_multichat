@@ -4,6 +4,7 @@
   "description": "Инструменты сборки единых исполняемых файлов (не нужны для запуска приложения)",
   "devDependencies": {
     "esbuild": "^0.25.0",
-    "postject": "^1.0.0-alpha.6"
+    "postject": "^1.0.0-alpha.6",
+    "rcedit": "^4.0.1"
   }
 }

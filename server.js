@@ -288,6 +288,7 @@ const server = http.createServer(async (req, res) => {
       if (p === '/') return serveFile(res, 'panel.html');
       if (p === '/overlay') return serveFile(res, 'overlay.html');
       if (p === '/overlay.css') return serveFile(res, 'overlay.css');
+      if (p === '/favicon.svg') return serveFile(res, 'favicon.svg');
       if (p === '/favicon.ico') { res.writeHead(204); return res.end(); }
       if (p === '/events') {
         res.writeHead(200, {

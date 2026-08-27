@@ -6,6 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
+const { spawn, spawnSync } = require('child_process');
 const { TwitchSource, channelFromUrl } = require('./lib/twitch');
 const { YouTubeSource } = require('./lib/youtube');
 
@@ -410,4 +411,61 @@ function listen(port, remaining) {
   });
 }
 
+// ---------- оконный режим (--window) ----------
+// Та же веб-админка, но отдельным окном приложения: используем режим
+// --app у установленного Chromium-браузера (Edge есть на любой Windows,
+// Chrome/Chromium — почти везде). Если ничего не нашли — обычный браузер.
+function openAppWindow(url) {
+  const args = [
+    `--app=${url}`,
+    `--user-data-dir=${path.join(APP_DIR, '.window-profile')}`,
+    '--window-size=940,960',
+    '--no-first-run',
+    '--no-default-browser-check',
+  ];
+  const launch = exe => {
+    const p = spawn(exe, args, { detached: true, stdio: 'ignore' });
+    p.on('error', () => {});
+    p.unref();
+  };
+  try {
+    if (process.platform === 'win32') {
+      const cands = [
+        path.join(process.env['ProgramFiles(x86)'] || '', 'Microsoft\\Edge\\Application\\msedge.exe'),
+        path.join(process.env.ProgramFiles || '', 'Microsoft\\Edge\\Application\\msedge.exe'),
+        path.join(process.env.ProgramFiles || '', 'Google\\Chrome\\Application\\chrome.exe'),
+        path.join(process.env.LOCALAPPDATA || '', 'Google\\Chrome\\Application\\chrome.exe'),
+      ];
+      const exe = cands.find(c => { try { return fs.existsSync(c); } catch (e) { return false; } });
+      if (exe) { launch(exe); console.log('  Окно админки: ' + path.basename(exe)); return; }
+      spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref();
+    } else if (process.platform === 'darwin') {
+      const cands = [
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+        '/Applications/Chromium.app/Contents/MacOS/Chromium',
+      ];
+      const exe = cands.find(c => { try { return fs.existsSync(c); } catch (e) { return false; } });
+      if (exe) { launch(exe); console.log('  Окно админки: ' + path.basename(exe)); return; }
+      spawn('open', [url], { detached: true, stdio: 'ignore' }).unref();
+    } else {
+      for (const name of ['microsoft-edge', 'google-chrome', 'chromium', 'chromium-browser']) {
+        if (spawnSync('which', [name], { stdio: 'ignore' }).status === 0) {
+          launch(name);
+          console.log('  Окно админки: ' + name);
+          return;
+        }
+      }
+      spawn('xdg-open', [url], { detached: true, stdio: 'ignore' }).unref();
+    }
+    console.log('  Окно админки: Chromium не найден, открыл обычный браузер');
+  } catch (e) {
+    logErr('window', e);
+  }
+}
+
 listen(config.port, 20);
+if (process.argv.includes('--window')) {
+  // окно открываем после того, как порт точно определился
+  server.once('listening', () => setTimeout(() => openAppWindow(`http://127.0.0.1:${actualPort}/`), 300));
+}

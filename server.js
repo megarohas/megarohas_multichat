@@ -3,6 +3,7 @@
 // Zero dependencies: plain Node http + SSE, anonymous Twitch IRC, YouTube InnerTube polling.
 const http = require('http');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { TwitchSource, channelFromUrl } = require('./lib/twitch');
@@ -40,7 +41,10 @@ process.on('uncaughtException', e => logErr('uncaughtException', e));
 process.on('unhandledRejection', e => logErr('unhandledRejection', e));
 
 // ---------- config ----------
-let config = { host: '127.0.0.1', port: 3131, sources: [] };
+// host 0.0.0.0 = сервер виден всем устройствам локальной сети (OBS на
+// другом ПК, телефон и т.п.). Поставь в config.json "host": "127.0.0.1",
+// если нужно только на этой машине.
+let config = { host: '0.0.0.0', port: 3131, sources: [] };
 try {
   // Блокнот и PowerShell любят сохранять UTF-8 с BOM — срезаем
   const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8').replace(/^\uFEFF/, ''));
@@ -296,7 +300,7 @@ const server = http.createServer(async (req, res) => {
         req.on('close', () => clients.delete(res));
         return;
       }
-      if (p === '/api/state') return json(res, 200, { host: config.host, port: actualPort, sources: statusList() });
+      if (p === '/api/state') return json(res, 200, { host: config.host, port: actualPort, lan: lanOrigins(), sources: statusList() });
       if (p === '/api/fonts') {
         let files = [];
         try { files = fs.readdirSync(FONTS_DIR).filter(f => FONT_RE.test(f)).sort(); } catch (e) {}
@@ -352,10 +356,30 @@ const server = http.createServer(async (req, res) => {
 // следующий свободный и показываем фактические адреса.
 let actualPort = config.port;
 
+// Адреса, по которым сервер доступен с других устройств локальной сети.
+function lanOrigins() {
+  if (config.host && !['0.0.0.0', '::', ''].includes(config.host)) {
+    return config.host === '127.0.0.1' || config.host === 'localhost'
+      ? [] : [`http://${config.host}:${actualPort}`];
+  }
+  const out = [];
+  for (const list of Object.values(os.networkInterfaces())) {
+    for (const it of list || []) {
+      if ((it.family === 'IPv4' || it.family === 4) && !it.internal) {
+        out.push(`http://${it.address}:${actualPort}`);
+      }
+    }
+  }
+  return out;
+}
+
 function printBanner() {
   console.log('megarohas_multichat запущен:');
   console.log(`  Панель управления: http://127.0.0.1:${actualPort}/`);
   console.log(`  Оверлей для OBS:   http://127.0.0.1:${actualPort}/overlay`);
+  for (const o of lanOrigins()) {
+    console.log(`  По локальной сети: ${o}/  (панель)  ·  ${o}/overlay`);
+  }
 }
 
 function startSources() {

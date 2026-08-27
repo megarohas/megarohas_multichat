@@ -147,18 +147,27 @@ function renderRows(list) {
     re.className = 'icon';
     re.textContent = '⟳';
     re.title = 'Переподключить';
-    re.onclick = () => fetch('/api/sources/' + s.id + '/reconnect', { method: 'POST' });
+    re.onclick = () => fetch('/api/sources/' + s.id + '/reconnect', { method: 'POST' }).then(refresh, refresh);
     row.appendChild(re);
 
     const del = document.createElement('button');
     del.className = 'icon';
     del.textContent = '✕';
     del.title = 'Удалить';
-    del.onclick = () => fetch('/api/sources/' + s.id, { method: 'DELETE' });
+    del.onclick = () => fetch('/api/sources/' + s.id, { method: 'DELETE' }).then(refresh, refresh);
     row.appendChild(del);
 
     rows.appendChild(row);
   }
+}
+
+// Не полагаемся на один только SSE-пуш: любые действия сразу
+// подтягивают свежий список, плюс страховочный периодический рефреш.
+async function refresh() {
+  try {
+    const s = await (await fetch('/api/state')).json();
+    renderRows(s.sources);
+  } catch (e) { /* сервер недоступен — SSE переподключится */ }
 }
 
 document.getElementById('add').addEventListener('submit', async e => {
@@ -167,14 +176,19 @@ document.getElementById('add').addEventListener('submit', async e => {
   const url = input.value.trim();
   if (!url) return;
   errEl.textContent = '';
-  const r = await fetch('/api/sources', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ url }),
-  });
-  const j = await r.json();
-  if (j.error) errEl.textContent = j.error;
-  else input.value = '';
+  try {
+    const r = await fetch('/api/sources', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const j = await r.json();
+    if (j.error) errEl.textContent = j.error;
+    else input.value = '';
+  } catch (err) {
+    errEl.textContent = 'Сервер не отвечает';
+  }
+  refresh();
 });
 
 document.getElementById('copy').onclick = async () => {
@@ -187,8 +201,10 @@ document.getElementById('openOverlay').onclick = () => window.open(overlayUrl, '
 document.getElementById('test').onclick = () => fetch('/api/test', { method: 'POST' });
 document.getElementById('clear').onclick = () => fetch('/api/clear', { method: 'POST' });
 
-fetch('/api/state').then(r => r.json()).then(s => renderRows(s.sources));
+refresh();
+setInterval(refresh, 15000);
 const es = new EventSource('/events');
+es.onopen = refresh;
 es.onmessage = e => {
   let d;
   try { d = JSON.parse(e.data); } catch (err) { return; }

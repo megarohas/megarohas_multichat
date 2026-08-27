@@ -1,6 +1,6 @@
 {
   "name": "megarohas_multichat",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Локальный агрегатор чатов Twitch и YouTube в один OBS-оверлей — без API-ключей и сторонних сервисов",
   "main": "server.js",
   "scripts": {

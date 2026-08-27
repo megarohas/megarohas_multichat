@@ -7,6 +7,7 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn, spawnSync } = require('child_process');
+const VERSION = require('./package.json').version;
 const { TwitchSource, channelFromUrl } = require('./lib/twitch');
 const { YouTubeSource } = require('./lib/youtube');
 
@@ -302,7 +303,7 @@ const server = http.createServer(async (req, res) => {
         req.on('close', () => clients.delete(res));
         return;
       }
-      if (p === '/api/state') return json(res, 200, { host: config.host, port: actualPort, lan: lanOrigins(), sources: statusList() });
+      if (p === '/api/state') return json(res, 200, { version: VERSION, host: config.host, port: actualPort, lan: lanOrigins(), sources: statusList() });
       if (p === '/api/fonts') {
         let files = [];
         try { files = fs.readdirSync(FONTS_DIR).filter(f => FONT_RE.test(f)).sort(); } catch (e) {}

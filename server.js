@@ -296,7 +296,7 @@ const server = http.createServer(async (req, res) => {
         req.on('close', () => clients.delete(res));
         return;
       }
-      if (p === '/api/state') return json(res, 200, { host: config.host, port: config.port, sources: statusList() });
+      if (p === '/api/state') return json(res, 200, { host: config.host, port: actualPort, sources: statusList() });
       if (p === '/api/fonts') {
         let files = [];
         try { files = fs.readdirSync(FONTS_DIR).filter(f => FONT_RE.test(f)).sort(); } catch (e) {}
@@ -347,22 +347,43 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.on('error', e => {
-  if (e.code === 'EADDRINUSE') {
-    console.error(`Порт ${config.port} занят — возможно, megarohas_multichat уже запущен. Закрой старый процесс или поменяй port в config.json.`);
-    process.exit(1);
-  }
-  throw e;
-});
+// ---------- запуск ----------
+// Если желаемый порт занят (другая копия, чужое приложение) — берём
+// следующий свободный и показываем фактические адреса.
+let actualPort = config.port;
 
-server.listen(config.port, config.host, () => {
+function printBanner() {
   console.log('megarohas_multichat запущен:');
-  console.log(`  Панель управления: http://${config.host}:${config.port}/`);
-  console.log(`  Оверлей для OBS:   http://${config.host}:${config.port}/overlay`);
+  console.log(`  Панель управления: http://127.0.0.1:${actualPort}/`);
+  console.log(`  Оверлей для OBS:   http://127.0.0.1:${actualPort}/overlay`);
+}
+
+function startSources() {
   for (const s of config.sources) {
     if (s && s.url) {
       const r = addSource(s.url, false);
       if (r.error) console.error(`Источник ${s.url}: ${r.error}`);
     }
   }
-});
+}
+
+function listen(port, remaining) {
+  const onErr = e => {
+    if (e.code === 'EADDRINUSE' && remaining > 0) {
+      console.log(`Порт ${port} занят — пробую ${port + 1}…`);
+      listen(port + 1, remaining - 1);
+    } else {
+      logErr('listen', e);
+      process.exit(1);
+    }
+  };
+  server.once('error', onErr);
+  server.listen(port, config.host, () => {
+    server.removeListener('error', onErr);
+    actualPort = port;
+    printBanner();
+    startSources();
+  });
+}
+
+listen(config.port, 20);
